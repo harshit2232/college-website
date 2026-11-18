@@ -33,7 +33,10 @@ const connectDB = async () => {
     }
   } catch (error) {
     console.error(` Error connecting to database: ${error.message}`);
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      process.exit(1);
+    }
+    throw error;
   }
 };
 

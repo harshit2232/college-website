@@ -47,6 +47,25 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Middleware to ensure DB connection for serverless invocations
+let isDbConnected = false;
+app.use(async (req, res, next) => {
+  if (!isDbConnected) {
+    try {
+      await connectDB();
+      isDbConnected = true;
+      const User = require('./models/User');
+      const adminExists = await User.findOne({ email: { $in: ['rajh36073@gmail.com', 'rahj36073@gmail.com'] } });
+      if (!adminExists) {
+        await seedDatabase();
+      }
+    } catch (err) {
+      console.error('Database connection error in middleware:', err.message);
+    }
+  }
+  next();
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/programs', programRoutes);
@@ -71,14 +90,15 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-// Initialize Database & Server
+// Initialize Database & Server for standalone execution
 const startServer = async () => {
   try {
     await connectDB();
+    isDbConnected = true;
 
     // Check if initial seed is needed (e.g. admin creation)
     const User = require('./models/User');
-    const adminExists = await User.findOne({ email: 'rajh36073@gmail.com' });
+    const adminExists = await User.findOne({ email: { $in: ['rajh36073@gmail.com', 'rahj36073@gmail.com'] } });
     if (!adminExists) {
       console.log('Seeding initial admin and programs...');
       await seedDatabase();
@@ -97,4 +117,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
