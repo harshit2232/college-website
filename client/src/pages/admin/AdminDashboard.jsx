@@ -1,0 +1,264 @@
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { reportApi } from '../../api/endpoints';
+import StatusBadge from '../../components/StatusBadge';
+import {
+  Users,
+  FileText,
+  IndianRupee,
+  Award,
+  BookOpen,
+  Download,
+  TrendingUp,
+  PieChart as PieIcon,
+  BarChart2,
+  Calendar,
+  Sparkles,
+  ExternalLink,
+} from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+
+export const AdminDashboard = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        setLoading(true);
+        const res = await reportApi.getAnalytics();
+        if (res.success) {
+          setData(res);
+        }
+      } catch (err) {
+        console.error('Error fetching admin analytics:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAnalytics();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-slate-400 text-xs">
+        Compiling analytics dashboard...
+      </div>
+    );
+  }
+
+  const metrics = data?.metrics || {};
+  const statusChartData = data?.statusChartData || [];
+  const deptData = data?.departmentBreakdown || [];
+  const recentApps = data?.recentApplications || [];
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200 mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-rose-600" />
+            <span>Admissions Executive Intelligence Console</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-serif">
+            Admissions Overview & Analytics
+          </h1>
+          <p className="text-xs text-slate-500">
+            Real-time enrollment funnels, department metrics, revenue auditing, and capacity tracking.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <a
+            href={reportApi.getExportCSVUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV Report</span>
+          </a>
+          <Link
+            to="/admin/programs"
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-brand-500/20"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Manage Programs</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Primary KPI Metrics Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-brand-50 text-brand-700 rounded-xl">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase text-slate-400">Total Applications</span>
+            <p className="text-2xl font-extrabold text-slate-900">{metrics.totalApplications || 0}</p>
+            <span className="text-[10px] text-slate-500">All departments</span>
+          </div>
+        </div>
+
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl">
+            <Award className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase text-slate-400">Acceptance Rate</span>
+            <p className="text-2xl font-extrabold text-emerald-600">
+              {metrics.acceptanceRate || 0}%
+            </p>
+            <span className="text-[10px] text-slate-500">{metrics.approvedCount || 0} Admitted</span>
+          </div>
+        </div>
+
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-indigo-50 text-indigo-700 rounded-xl">
+            <IndianRupee className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase text-slate-400">Fee Revenue (INR)</span>
+            <p className="text-2xl font-extrabold text-indigo-700 font-mono">
+              ₹{Number(metrics.totalRevenue || 0).toLocaleString('en-IN')}
+            </p>
+            <span className="text-[10px] text-slate-500">Verified receipts</span>
+          </div>
+        </div>
+
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-purple-50 text-purple-700 rounded-xl">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase text-slate-400">Registered Students</span>
+            <p className="text-2xl font-extrabold text-purple-700">{metrics.totalStudents || 0}</p>
+            <span className="text-[10px] text-slate-500">{metrics.facultyCount || 0} Faculty Reviewers</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Department Distribution Bar Chart */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Department Application Volume</h3>
+              <p className="text-[11px] text-slate-400">Applications and admissions per academic school</p>
+            </div>
+            <BarChart2 className="w-4 h-4 text-brand-600" />
+          </div>
+
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={deptData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                <XAxis dataKey="department" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="applications" name="Applications" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="approved" name="Admitted" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Application Status Breakdown Donut Chart */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Application Status Breakdown</h3>
+              <p className="text-[11px] text-slate-400">Current candidate lifecycle stages</p>
+            </div>
+            <PieIcon className="w-4 h-4 text-emerald-600" />
+          </div>
+
+          <div className="h-64 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={statusChartData.filter((s) => s.count > 0)}
+                  dataKey="count"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                >
+                  {statusChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Applications Feed */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm">Recent Application Stream</h3>
+            <p className="text-[11px] text-slate-400">Latest submissions across university programs</p>
+          </div>
+          <Link
+            to="/admin/applications"
+            className="text-xs font-semibold text-brand-600 hover:text-brand-800"
+          >
+            View All Applications →
+          </Link>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {recentApps.map((app) => (
+            <div key={app._id} className="py-3 flex items-center justify-between gap-4 text-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs uppercase">
+                  {app.studentName.charAt(0)}
+                </div>
+                <div>
+                  <span className="font-bold text-slate-900 block">{app.studentName}</span>
+                  <span className="text-[11px] text-slate-400">{app.programName}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[11px] text-slate-400 hidden sm:block">
+                  {app.applicationNumber}
+                </span>
+                <StatusBadge status={app.status} size="sm" />
+                <Link
+                  to={`/faculty/review/${app._id}`}
+                  className="p-1 text-slate-400 hover:text-brand-600 transition"
+                  title="View Detail"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;
