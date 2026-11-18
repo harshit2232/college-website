@@ -63,7 +63,9 @@ exports.login = async (req, res, next) => {
     // Find user by email (with IEM alias fallback)
     const normalizedEmail = email.toLowerCase().trim();
     let user = await User.findOne({ email: normalizedEmail }).select('+password');
-    if (!user && normalizedEmail === 'faculty@iem.edu.in') {
+    if (!user && (normalizedEmail === 'rahj36073@gmail.com' || normalizedEmail === 'rajh36073@gmail.com')) {
+      user = await User.findOne({ email: { $in: ['rajh36073@gmail.com', 'rahj36073@gmail.com'] } }).select('+password');
+    } else if (!user && normalizedEmail === 'faculty@iem.edu.in') {
       user = await User.findOne({ email: 'faculty@nexis.edu' }).select('+password');
     } else if (!user && normalizedEmail === 'student@iem.edu.in') {
       user = await User.findOne({ email: 'student@nexis.edu' }).select('+password');

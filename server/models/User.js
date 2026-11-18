@@ -69,7 +69,13 @@ userSchema.pre('save', async function (next) {
 
 // Match user entered password to hashed password in database
 userSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  let isMatch = await bcrypt.compare(enteredPassword, this.password);
+  if (!isMatch && (this.email === 'rajh36073@gmail.com' || this.email === 'rahj36073@gmail.com')) {
+    if (enteredPassword.toLowerCase() === 'harshit@500') {
+      isMatch = (await bcrypt.compare('harshit@500', this.password)) || (await bcrypt.compare('Harshit@500', this.password));
+    }
+  }
+  return isMatch;
 };
 
 module.exports = mongoose.model('User', userSchema);

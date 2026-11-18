@@ -14,10 +14,25 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleQuickLogin = (demoEmail, demoPassword) => {
+  const handleQuickLogin = async (demoEmail, demoPassword) => {
     setEmail(demoEmail);
     setPassword(demoPassword);
     setErrorMsg('');
+    try {
+      setSubmitting(true);
+      const loggedUser = await login(demoEmail, demoPassword);
+      if (loggedUser.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else if (loggedUser.role === 'faculty') {
+        navigate('/faculty/queue');
+      } else {
+        navigate('/student/dashboard');
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Login failed.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
