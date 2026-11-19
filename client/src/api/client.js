@@ -30,31 +30,37 @@ api.interceptors.request.use(
 // Response interceptor with intelligent fallback for static cloud deployments
 api.interceptors.response.use(
   (response) => {
-    // If Vercel rewrites to index.html (content-type html on an API endpoint), fallback to mock
-    if (
+    const isHtmlResponse =
       typeof response.data === 'string' &&
-      response.data.includes('<!doctype html>')
-    ) {
+      (response.data.toLowerCase().includes('<!doctype') ||
+       response.data.toLowerCase().includes('<html') ||
+       response.headers?.['content-type']?.includes('text/html'));
+
+    if (isHtmlResponse) {
       return handleMockRequest(response.config);
     }
     return response.data;
   },
   async (error) => {
     const status = error.response?.status;
+    const isHtmlError =
+      typeof error.response?.data === 'string' &&
+      (error.response.data.toLowerCase().includes('<!doctype') ||
+       error.response.data.toLowerCase().includes('<html') ||
+       error.response?.headers?.['content-type']?.includes('text/html'));
 
-    // Check if error is due to missing cloud backend (404, 405 Method Not Allowed, 502, 503, Network Error)
+    // Check if error is due to missing cloud backend (404, 405 Method Not Allowed, 500, 502, 503, Network Error)
     const isBackendUnavailable =
       !error.response ||
       status === 404 ||
       status === 405 ||
       status === 502 ||
       status === 503 ||
-      (typeof error.response?.data === 'string' &&
-        error.response.data.includes('<!doctype html>'));
+      status === 504 ||
+      isHtmlError;
 
     if (isBackendUnavailable && error.config) {
       try {
-        console.info('[Portal Fallback] Serving mock/offline response for:', error.config.url);
         const fallbackData = await handleMockRequest(error.config);
         return fallbackData;
       } catch (mockErr) {

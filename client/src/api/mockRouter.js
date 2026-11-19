@@ -23,7 +23,9 @@ const setStoredState = (key, data) => {
 };
 
 export const handleMockRequest = async (config) => {
-  const url = (config.url || '').replace(/^\/api/, '');
+  // Normalize URL by removing domain, /api prefix, and query parameters
+  const rawUrl = (config.url || '').replace(/^https?:\/\/[^\/]+/, '').replace(/^\/api/, '');
+  const [path, queryString] = rawUrl.split('?');
   const method = (config.method || 'get').toLowerCase();
   let body = {};
 
@@ -37,25 +39,25 @@ export const handleMockRequest = async (config) => {
     body = {};
   }
 
-  // Small latency simulation for natural UX
-  await new Promise((r) => setTimeout(r, 120));
+  // Small delay for natural UX
+  await new Promise((r) => setTimeout(r, 80));
 
   // --- 1. AUTH ROUTES ---
-  if (url === '/auth/login' && method === 'post') {
+  if (path === '/auth/login' && method === 'post') {
     const email = (body.email || '').toLowerCase().trim();
-    const password = body.password || '';
+    const password = (body.password || '').trim();
 
     // Admin login
     if (
       (email === 'rajh36073@gmail.com' || email === 'rahj36073@gmail.com') &&
-      (password.toLowerCase() === 'harshit@500')
+      password.toLowerCase() === 'harshit@500'
     ) {
       const user = mockUsers.admin;
-      const token = 'mock-jwt-token-admin-' + Date.now();
+      const token = 'mock-jwt-token-admin';
       setStoredState('current_user', user);
       return {
         success: true,
-        message: 'Logged in successfully (Demo Console)',
+        message: 'Logged in successfully',
         token,
         user,
       };
@@ -67,7 +69,7 @@ export const handleMockRequest = async (config) => {
       password.toLowerCase() === 'faculty@500'
     ) {
       const user = mockUsers.faculty;
-      const token = 'mock-jwt-token-faculty-' + Date.now();
+      const token = 'mock-jwt-token-faculty';
       setStoredState('current_user', user);
       return {
         success: true,
@@ -83,7 +85,7 @@ export const handleMockRequest = async (config) => {
       password.toLowerCase() === 'student@500'
     ) {
       const user = mockUsers.student;
-      const token = 'mock-jwt-token-student-' + Date.now();
+      const token = 'mock-jwt-token-student';
       setStoredState('current_user', user);
       return {
         success: true,
@@ -93,7 +95,7 @@ export const handleMockRequest = async (config) => {
       };
     }
 
-    // Check custom registered users
+    // Custom registered user
     const registered = getStoredState('registered_users', []);
     const found = registered.find(
       (u) => u.email.toLowerCase() === email && u.password === password
@@ -106,12 +108,11 @@ export const handleMockRequest = async (config) => {
         role: found.role || 'student',
         status: 'active',
       };
-      const token = 'mock-jwt-token-' + user._id;
       setStoredState('current_user', user);
       return {
         success: true,
         message: 'Logged in successfully',
-        token,
+        token: 'mock-jwt-token-' + user._id,
         user,
       };
     }
@@ -119,7 +120,7 @@ export const handleMockRequest = async (config) => {
     throw new Error('Invalid email or password.');
   }
 
-  if (url === '/auth/register' && method === 'post') {
+  if (path === '/auth/register' && method === 'post') {
     const newUser = {
       _id: 'user-' + Date.now(),
       name: body.name || 'New Student',
@@ -141,7 +142,7 @@ export const handleMockRequest = async (config) => {
     };
   }
 
-  if (url === '/auth/me' && method === 'get') {
+  if (path === '/auth/me' && method === 'get') {
     const currentUser = getStoredState('current_user', mockUsers.admin);
     return {
       success: true,
@@ -150,13 +151,28 @@ export const handleMockRequest = async (config) => {
     };
   }
 
-  if (url === '/auth/logout') {
+  if (path === '/auth/logout') {
     localStorage.removeItem('iem_current_user');
     return { success: true, message: 'Logged out successfully' };
   }
 
+  if (path === '/auth/student-profile' && method === 'put') {
+    return {
+      success: true,
+      message: 'Profile updated successfully',
+      profile: { ...mockStudentProfile, ...body, profileCompletion: 100 },
+    };
+  }
+
+  if (path === '/auth/profile' && method === 'put') {
+    const currentUser = getStoredState('current_user', mockUsers.admin);
+    const updated = { ...currentUser, ...body };
+    setStoredState('current_user', updated);
+    return { success: true, message: 'Profile updated successfully', user: updated };
+  }
+
   // --- 2. PROGRAMS ROUTES ---
-  if (url === '/programs' && method === 'get') {
+  if (path === '/programs' && method === 'get') {
     return {
       success: true,
       count: mockPrograms.length,
@@ -166,36 +182,31 @@ export const handleMockRequest = async (config) => {
     };
   }
 
-  if (url.startsWith('/programs/') && method === 'get') {
-    const id = url.split('/programs/')[1];
+  if (path.startsWith('/programs/') && method === 'get') {
+    const id = path.split('/programs/')[1];
     const program = mockPrograms.find((p) => p._id === id || p.code === id) || mockPrograms[0];
     return { success: true, program };
   }
 
   // --- 3. ANALYTICS & REPORTS ---
-  if (url === '/reports/analytics') {
+  if (path === '/reports/analytics') {
     return mockAnalytics;
   }
 
   // --- 4. APPLICATIONS ROUTES ---
-  if (url === '/applications/my-applications') {
+  if (path === '/applications/my-applications' || path === '/applications') {
     const apps = getStoredState('applications', mockApplications);
     return { success: true, count: apps.length, applications: apps };
   }
 
-  if (url === '/applications' && method === 'get') {
-    const apps = getStoredState('applications', mockApplications);
-    return { success: true, count: apps.length, applications: apps };
-  }
-
-  if (url.startsWith('/applications/') && method === 'get') {
-    const id = url.split('/applications/')[1];
+  if (path.startsWith('/applications/') && method === 'get') {
+    const id = path.split('/applications/')[1];
     const apps = getStoredState('applications', mockApplications);
     const found = apps.find((a) => a._id === id || a.applicationNumber === id) || apps[0];
     return { success: true, application: found };
   }
 
-  if (url === '/applications' && method === 'post') {
+  if (path === '/applications' && method === 'post') {
     const apps = getStoredState('applications', mockApplications);
     const prog = mockPrograms.find((p) => p._id === body.programId) || mockPrograms[0];
     const currentUser = getStoredState('current_user', mockUsers.student);
@@ -204,7 +215,9 @@ export const handleMockRequest = async (config) => {
       _id: 'app-' + Date.now(),
       applicationNumber: 'APP-2026-' + Math.floor(100000 + Math.random() * 900000),
       student: currentUser,
+      studentName: currentUser.name || 'Applicant',
       program: prog,
+      programName: prog.name,
       intakeTerm: body.intakeTerm || 'Fall 2026',
       status: 'Draft',
       currentStep: 1,
@@ -222,8 +235,8 @@ export const handleMockRequest = async (config) => {
     return { success: true, message: 'Application draft created', application: newApp };
   }
 
-  if (url.includes('/step') && method === 'put') {
-    const id = url.split('/applications/')[1].split('/step')[0];
+  if (path.includes('/step') && method === 'put') {
+    const id = path.split('/applications/')[1].split('/step')[0];
     const apps = getStoredState('applications', mockApplications);
     const app = apps.find((a) => a._id === id) || apps[0];
     if (app) {
@@ -235,8 +248,8 @@ export const handleMockRequest = async (config) => {
     return { success: true, message: 'Application step saved', application: app };
   }
 
-  if (url.includes('/submit') && method === 'post') {
-    const id = url.split('/applications/')[1].split('/submit')[0];
+  if (path.includes('/submit') && method === 'post') {
+    const id = path.split('/applications/')[1].split('/submit')[0];
     const apps = getStoredState('applications', mockApplications);
     const app = apps.find((a) => a._id === id) || apps[0];
     if (app) {
@@ -255,13 +268,13 @@ export const handleMockRequest = async (config) => {
   }
 
   // --- 5. FACULTY EVALUATION QUEUE ---
-  if (url.startsWith('/faculty/queue')) {
+  if (path.startsWith('/faculty/queue')) {
     const apps = getStoredState('applications', mockApplications);
     return { success: true, count: apps.length, applications: apps };
   }
 
-  if (url.includes('/faculty/evaluate')) {
-    const id = url.split('/faculty/evaluate/')[1];
+  if (path.includes('/faculty/evaluate')) {
+    const id = path.split('/faculty/evaluate/')[1];
     const apps = getStoredState('applications', mockApplications);
     const app = apps.find((a) => a._id === id) || apps[0];
     if (app) {
@@ -287,14 +300,16 @@ export const handleMockRequest = async (config) => {
   }
 
   // --- 6. PAYMENTS & DOCUMENTS ---
-  if (url === '/payments/simulate' && method === 'post') {
+  if (path === '/payments/simulate' && method === 'post') {
     return {
       success: true,
       message: 'Payment simulated successfully',
       payment: {
         _id: 'pay-' + Date.now(),
         transactionId: 'TXN-IEM-' + Math.floor(10000000 + Math.random() * 90000000),
+        receiptNumber: 'RCP-2026-' + Math.floor(100000 + Math.random() * 900000),
         amount: body.amount || 1200,
+        currency: 'INR',
         status: 'success',
         paymentMethod: 'card_simulator',
         paidAt: new Date().toISOString(),
@@ -302,7 +317,23 @@ export const handleMockRequest = async (config) => {
     };
   }
 
-  if (url === '/documents/upload' && method === 'post') {
+  if (path.startsWith('/payments/application/')) {
+    return {
+      success: true,
+      payment: {
+        _id: 'pay-demo-1',
+        transactionId: 'TXN-IEM-99482103',
+        receiptNumber: 'RCP-2026-004812',
+        amount: 1200,
+        currency: 'INR',
+        status: 'success',
+        paymentMethod: 'card_simulator',
+        paidAt: '2026-10-25T14:30:00.000Z',
+      },
+    };
+  }
+
+  if (path === '/documents/upload' && method === 'post') {
     return {
       success: true,
       message: 'Document uploaded successfully',
@@ -317,7 +348,7 @@ export const handleMockRequest = async (config) => {
     };
   }
 
-  if (url === '/documents/my-documents') {
+  if (path === '/documents/my-documents') {
     return {
       success: true,
       documents: [
@@ -338,16 +369,37 @@ export const handleMockRequest = async (config) => {
     };
   }
 
-  if (url === '/admin/users') {
+  if (path.startsWith('/documents/application/')) {
+    return {
+      success: true,
+      documents: [
+        {
+          _id: 'doc-1',
+          documentType: 'marksheet_12th',
+          fileName: '12th_grade_marksheet.pdf',
+          status: 'verified',
+        },
+        {
+          _id: 'doc-2',
+          documentType: 'id_proof',
+          fileName: 'aadhaar_card.pdf',
+          status: 'verified',
+        },
+      ],
+    };
+  }
+
+  if (path === '/admin/users') {
     return {
       success: true,
       users: [mockUsers.admin, mockUsers.faculty, mockUsers.student],
     };
   }
 
-  if (url === '/notifications') {
+  if (path === '/notifications' || path === '/notifications/read-all') {
     return {
       success: true,
+      unreadCount: 1,
       notifications: [
         {
           _id: 'notif-1',
