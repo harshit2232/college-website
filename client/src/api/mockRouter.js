@@ -6,6 +6,18 @@ import {
   mockAnalytics,
 } from './mockService';
 
+// Default initial notifications
+const defaultNotifications = [
+  {
+    _id: 'notif-default-1',
+    title: 'Admissions Open',
+    message: 'Fall 2026 academic admissions are officially open across all degree programs.',
+    link: '/admin/programs',
+    isRead: false,
+    createdAt: new Date().toISOString(),
+  },
+];
+
 // Persistent localStorage state for demo mode
 const getStoredState = (key, fallback) => {
   try {
@@ -22,12 +34,34 @@ const setStoredState = (key, data) => {
   } catch (e) {}
 };
 
+// Helper to get all combined users (seeded + newly registered)
+const getAllUsers = () => {
+  const customUsers = getStoredState('registered_users', []);
+  const baseUsers = [
+    { ...mockUsers.admin, createdAt: '2026-10-01T00:00:00.000Z' },
+    { ...mockUsers.faculty, createdAt: '2026-10-05T00:00:00.000Z' },
+    { ...mockUsers.student, createdAt: '2026-10-10T00:00:00.000Z' },
+  ];
+
+  // Merge, avoiding duplicates by email
+  const userMap = new Map();
+  baseUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+  customUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+
+  return Array.from(userMap.values());
+};
+
 export const handleMockRequest = async (config) => {
   // Normalize URL by removing domain, /api prefix, and query parameters
   const rawUrl = (config.url || '').replace(/^https?:\/\/[^\/]+/, '').replace(/^\/api/, '');
   const [path, queryString] = rawUrl.split('?');
   const method = (config.method || 'get').toLowerCase();
   let body = {};
+
+  // Parse query params if any
+  const queryParams = new URLSearchParams(queryString || '');
+  const params = config.params || {};
+  const getParam = (key) => queryParams.get(key) || params[key] || '';
 
   try {
     if (typeof config.data === 'string') {
@@ -40,80 +74,74 @@ export const handleMockRequest = async (config) => {
   }
 
   // Small delay for natural UX
-  await new Promise((r) => setTimeout(r, 80));
+  await new Promise((r) => setTimeout(r, 60));
 
-  // --- 1. AUTH ROUTES ---
+  // ========================================================
+  // 1. AUTH ROUTES
+  // ========================================================
   if (path === '/auth/login' && method === 'post') {
     const email = (body.email || '').toLowerCase().trim();
     const password = (body.password || '').trim();
 
-    // Admin login
+    // Check all users (admin, faculty, student, custom registered)
+    const allUsers = getAllUsers();
+    
+    // Admin check
     if (
       (email === 'rajh36073@gmail.com' || email === 'rahj36073@gmail.com') &&
       password.toLowerCase() === 'harshit@500'
     ) {
       const user = mockUsers.admin;
-      const token = 'mock-jwt-token-admin';
       setStoredState('current_user', user);
       return {
         success: true,
         message: 'Logged in successfully',
-        token,
+        token: 'mock-jwt-token-admin',
         user,
       };
     }
 
-    // Faculty login
+    // Faculty check
     if (
       (email === 'faculty@iem.edu.in' || email === 'faculty@nexis.edu') &&
       password.toLowerCase() === 'faculty@500'
     ) {
       const user = mockUsers.faculty;
-      const token = 'mock-jwt-token-faculty';
       setStoredState('current_user', user);
       return {
         success: true,
         message: 'Logged in successfully',
-        token,
+        token: 'mock-jwt-token-faculty',
         user,
       };
     }
 
-    // Student login
+    // Default student check
     if (
       (email === 'student@iem.edu.in' || email === 'student@nexis.edu') &&
       password.toLowerCase() === 'student@500'
     ) {
       const user = mockUsers.student;
-      const token = 'mock-jwt-token-student';
       setStoredState('current_user', user);
       return {
         success: true,
         message: 'Logged in successfully',
-        token,
+        token: 'mock-jwt-token-student',
         user,
       };
     }
 
-    // Custom registered user
-    const registered = getStoredState('registered_users', []);
-    const found = registered.find(
-      (u) => u.email.toLowerCase() === email && u.password === password
+    // Custom registered user check
+    const found = allUsers.find(
+      (u) => u.email.toLowerCase() === email && (u.password === password || !u.password)
     );
     if (found) {
-      const user = {
-        _id: found._id,
-        name: found.name,
-        email: found.email,
-        role: found.role || 'student',
-        status: 'active',
-      };
-      setStoredState('current_user', user);
+      setStoredState('current_user', found);
       return {
         success: true,
         message: 'Logged in successfully',
-        token: 'mock-jwt-token-' + user._id,
-        user,
+        token: 'mock-jwt-token-' + found._id,
+        user: found,
       };
     }
 
@@ -127,12 +155,35 @@ export const handleMockRequest = async (config) => {
       email: (body.email || '').toLowerCase().trim(),
       password: body.password || '',
       role: body.role || 'student',
+      department: body.department || 'Undergraduate Admissions',
+      phone: body.phone || '',
       status: 'active',
+      createdAt: new Date().toISOString(),
     };
+
+    // 1. Save user to registered_users list
     const registered = getStoredState('registered_users', []);
-    registered.push(newUser);
+    // Prevent duplicate email registration
+    const existingIndex = registered.findIndex((u) => u.email.toLowerCase() === newUser.email);
+    if (existingIndex >= 0) {
+      registered[existingIndex] = newUser;
+    } else {
+      registered.unshift(newUser);
+    }
     setStoredState('registered_users', registered);
     setStoredState('current_user', newUser);
+
+    // 2. Create notification for admin
+    const notifications = getStoredState('notifications', defaultNotifications);
+    notifications.unshift({
+      _id: 'notif-' + Date.now(),
+      title: '🎓 New Student Registration',
+      message: `${newUser.name} (${newUser.email}) just created an applicant portal account.`,
+      link: '/admin/users',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+    setStoredState('notifications', notifications);
 
     return {
       success: true,
@@ -171,7 +222,109 @@ export const handleMockRequest = async (config) => {
     return { success: true, message: 'Profile updated successfully', user: updated };
   }
 
-  // --- 2. PROGRAMS ROUTES ---
+  // ========================================================
+  // 2. ADMIN USER MANAGEMENT & DIRECTORY
+  // ========================================================
+  if (path === '/admin/users' && method === 'get') {
+    let users = getAllUsers();
+    const roleFilter = getParam('role');
+    const searchFilter = getParam('search').toLowerCase();
+
+    // Apply role filter
+    if (roleFilter && roleFilter !== 'All') {
+      users = users.filter((u) => u.role?.toLowerCase() === roleFilter.toLowerCase());
+    }
+
+    // Apply search filter
+    if (searchFilter) {
+      users = users.filter(
+        (u) =>
+          u.name?.toLowerCase().includes(searchFilter) ||
+          u.email?.toLowerCase().includes(searchFilter) ||
+          u.department?.toLowerCase().includes(searchFilter)
+      );
+    }
+
+    return {
+      success: true,
+      count: users.length,
+      users,
+    };
+  }
+
+  if (path === '/admin/users' && method === 'post') {
+    const created = {
+      _id: 'user-' + Date.now(),
+      name: body.name || 'New Staff',
+      email: (body.email || '').toLowerCase().trim(),
+      password: body.password || 'password123',
+      role: body.role || 'faculty',
+      department: body.department || 'Computer Science',
+      phone: body.phone || '',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    };
+    const registered = getStoredState('registered_users', []);
+    registered.unshift(created);
+    setStoredState('registered_users', registered);
+
+    return {
+      success: true,
+      message: `Account for ${created.name} created successfully.`,
+      user: created,
+    };
+  }
+
+  if (path.startsWith('/admin/users/') && method === 'put') {
+    const id = path.split('/admin/users/')[1];
+    const registered = getStoredState('registered_users', []);
+    const idx = registered.findIndex((u) => u._id === id);
+    if (idx >= 0) {
+      registered[idx] = { ...registered[idx], ...body };
+      setStoredState('registered_users', registered);
+    }
+    return { success: true, message: 'User updated successfully' };
+  }
+
+  if (path.startsWith('/admin/users/') && method === 'delete') {
+    const id = path.split('/admin/users/')[1];
+    let registered = getStoredState('registered_users', []);
+    registered = registered.filter((u) => u._id !== id);
+    setStoredState('registered_users', registered);
+    return { success: true, message: 'User deleted successfully' };
+  }
+
+  // ========================================================
+  // 3. NOTIFICATIONS
+  // ========================================================
+  if (path === '/notifications' && method === 'get') {
+    const notifications = getStoredState('notifications', defaultNotifications);
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    return {
+      success: true,
+      unreadCount,
+      notifications,
+    };
+  }
+
+  if (path === '/notifications/read-all' && method === 'put') {
+    const notifications = getStoredState('notifications', defaultNotifications);
+    const updated = notifications.map((n) => ({ ...n, isRead: true }));
+    setStoredState('notifications', updated);
+    return { success: true, message: 'All notifications marked as read' };
+  }
+
+  if (path.startsWith('/notifications/') && path.endsWith('/read') && method === 'put') {
+    const id = path.split('/notifications/')[1].split('/read')[0];
+    const notifications = getStoredState('notifications', defaultNotifications);
+    const updated = notifications.map((n) => (n._id === id ? { ...n, isRead: true } : n));
+    setStoredState('notifications', updated);
+    return { success: true, message: 'Notification marked as read' };
+  }
+
+  // ========================================================
+  // 4. PROGRAMS ROUTES
+  // ========================================================
   if (path === '/programs' && method === 'get') {
     return {
       success: true,
@@ -188,12 +341,30 @@ export const handleMockRequest = async (config) => {
     return { success: true, program };
   }
 
-  // --- 3. ANALYTICS & REPORTS ---
+  // ========================================================
+  // 5. ANALYTICS & REPORTS
+  // ========================================================
   if (path === '/reports/analytics') {
-    return mockAnalytics;
+    const allUsers = getAllUsers();
+    const studentCount = allUsers.filter((u) => u.role === 'student').length;
+    const facultyCount = allUsers.filter((u) => u.role === 'faculty').length;
+    const apps = getStoredState('applications', mockApplications);
+
+    return {
+      ...mockAnalytics,
+      metrics: {
+        ...mockAnalytics.metrics,
+        totalApplications: apps.length + 147,
+        totalStudents: 136 + studentCount - 1,
+        facultyCount: 14 + facultyCount - 1,
+      },
+      recentApplications: apps.slice(0, 5),
+    };
   }
 
-  // --- 4. APPLICATIONS ROUTES ---
+  // ========================================================
+  // 6. APPLICATIONS ROUTES
+  // ========================================================
   if (path === '/applications/my-applications' || path === '/applications') {
     const apps = getStoredState('applications', mockApplications);
     return { success: true, count: apps.length, applications: apps };
@@ -232,6 +403,19 @@ export const handleMockRequest = async (config) => {
     };
     apps.unshift(newApp);
     setStoredState('applications', apps);
+
+    // Create notification for admin
+    const notifications = getStoredState('notifications', defaultNotifications);
+    notifications.unshift({
+      _id: 'notif-' + Date.now(),
+      title: '📝 New Application Started',
+      message: `${currentUser.name} started draft application for ${prog.name}.`,
+      link: '/admin/applications',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+    setStoredState('notifications', notifications);
+
     return { success: true, message: 'Application draft created', application: newApp };
   }
 
@@ -263,11 +447,25 @@ export const handleMockRequest = async (config) => {
         note: 'Submitted with fee clearance',
       });
       setStoredState('applications', apps);
+
+      // Create notification for admin & faculty
+      const notifications = getStoredState('notifications', defaultNotifications);
+      notifications.unshift({
+        _id: 'notif-' + Date.now(),
+        title: '📬 New Application Submitted',
+        message: `${app.studentName} submitted application ${app.applicationNumber} for ${app.programName}.`,
+        link: '/faculty/queue',
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      });
+      setStoredState('notifications', notifications);
     }
     return { success: true, message: 'Application submitted successfully', application: app };
   }
 
-  // --- 5. FACULTY EVALUATION QUEUE ---
+  // ========================================================
+  // 7. FACULTY EVALUATION QUEUE
+  // ========================================================
   if (path.startsWith('/faculty/queue')) {
     const apps = getStoredState('applications', mockApplications);
     return { success: true, count: apps.length, applications: apps };
@@ -299,7 +497,9 @@ export const handleMockRequest = async (config) => {
     return { success: true, message: 'Evaluation submitted successfully', application: app };
   }
 
-  // --- 6. PAYMENTS & DOCUMENTS ---
+  // ========================================================
+  // 8. PAYMENTS & DOCUMENTS
+  // ========================================================
   if (path === '/payments/simulate' && method === 'post') {
     return {
       success: true,
@@ -384,29 +584,6 @@ export const handleMockRequest = async (config) => {
           documentType: 'id_proof',
           fileName: 'aadhaar_card.pdf',
           status: 'verified',
-        },
-      ],
-    };
-  }
-
-  if (path === '/admin/users') {
-    return {
-      success: true,
-      users: [mockUsers.admin, mockUsers.faculty, mockUsers.student],
-    };
-  }
-
-  if (path === '/notifications' || path === '/notifications/read-all') {
-    return {
-      success: true,
-      unreadCount: 1,
-      notifications: [
-        {
-          _id: 'notif-1',
-          title: 'Admissions Open',
-          message: 'Fall 2026 regular applications now active.',
-          isRead: false,
-          createdAt: new Date().toISOString(),
         },
       ],
     };

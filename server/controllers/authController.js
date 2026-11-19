@@ -30,7 +30,7 @@ exports.register = async (req, res, next) => {
       department: department || null,
     });
 
-    // If student, automatically initialize student profile
+    // If student, automatically initialize student profile & notify admins
     if (user.role === 'student') {
       await StudentProfile.create({
         user: user._id,
@@ -38,6 +38,22 @@ exports.register = async (req, res, next) => {
         academicHistory: [],
         standardizedTests: [],
       });
+
+      try {
+        const Notification = require('../models/Notification');
+        const adminUsers = await User.find({ role: 'admin' });
+        for (const admin of adminUsers) {
+          await Notification.create({
+            recipient: admin._id,
+            title: 'New Student Registration',
+            message: `${user.name} (${user.email}) has created an admissions account.`,
+            type: 'general',
+            link: '/admin/users',
+          });
+        }
+      } catch (notifErr) {
+        console.error('Failed to notify admins of new registration:', notifErr.message);
+      }
     }
 
     sendTokenResponse(user, 201, res, 'Account registered successfully');
